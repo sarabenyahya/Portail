@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const demandsSchema = new mongoose.Schema({
   employee: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
     ref: "Employee",
     required: true,
   },

@@ -7,13 +7,13 @@
           <label for="startDate" class="form-label fw-semibold">Date de début</label>
           <input id="startDate" type="date" v-model="startDate" class="form-control"
             :class="{ 'is-invalid': startDateError }" required />
-          <div class="invalid-feedback">Veuillez sélectionner une date de début.</div>
+          <div class="invalid-feedback" v-if="startDateError">{{ startDateError }}</div>
         </div>
         <div class="mb-4">
           <label for="endDate" class="form-label fw-semibold">Date de fin</label>
           <input id="endDate" type="date" v-model="endDate" class="form-control" :class="{ 'is-invalid': endDateError }"
             required />
-          <div class="invalid-feedback">Veuillez sélectionner une date de fin.</div>
+          <div class="invalid-feedback" v-if="endDateError">{{ endDateError }}</div>
         </div>
         <div class="d-flex justify-content-between">
           <button type="submit" class="btn btn-primary px-4" :disabled="loading">
@@ -36,38 +36,25 @@ export default {
   data() {
     return {
       startDate: '',
-      endDate: '',
-      loading: false,
-      startDateError: false,
-      endDateError: false,
+      endDate: ''
     };
   },
   methods: {
     async submit() {
-      this.startDateError = !this.startDate;
-      this.endDateError = !this.endDate;
-
-      if (this.startDateError || this.endDateError) {
+      if (!this.startDate || !this.endDate) {
+        alert('Veuillez remplir toutes les dates.');
         return;
       }
-
-      this.loading = true;
-      try {
-        await api.post('/demands', {
-          type: 'CONGE',
-          status: 'EN_ATTENTE',
-          dateDebut: this.startDate,
-          dateFin: this.endDate,
-        });
-        this.$emit('submitted');
-        this.$emit('close');
-      } catch (error) {
-        alert('Erreur lors de l\'envoi de la demande. Veuillez réessayer.');
-      } finally {
-        this.loading = false;
-      }
-    },
-  },
+      await api.post('/demands', {
+        type: 'CONGE',
+        status: 'EN_ATTENTE',
+        dateDebut: this.startDate,
+        dateFin: this.endDate
+      });
+      this.$emit('submitted');
+      this.$emit('close');
+    }
+  }
 };
 </script>
 

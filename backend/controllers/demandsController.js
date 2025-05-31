@@ -1,4 +1,4 @@
-const Demands = require("../models/Demands");
+const Demands = require("../models/Demand");
 
 // Créer une nouvelle demande
 exports.createDemand = async (req, res) => {

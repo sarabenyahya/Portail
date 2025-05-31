@@ -5,6 +5,7 @@ const cors = require("cors");
 const session = require("express-session");
 const demandRoutes = require("./routes/demandRoutes");
 const authRoutes = require("./routes/authRoutes");
+const Demand = require("./models/Demand");
 
 const server = express();
 
@@ -13,7 +14,7 @@ server.use(express.json());
 
 server.use(
   cors({
-    origin: "http://localhost:5174",
+    origin: "http://localhost:5175",
     credentials: true, // Allow credentials (cookies, authorization headers)
   })
 );
@@ -28,8 +29,14 @@ server.use(
 );
 
 // Routes de base
-server.get("/", (req, res) => {
-  res.json({ message: "Bienvenue sur l'API du Portail des Employés" });
+server.get("/api/demands", async (req, res) => {
+  try {
+    const demands = await Demand.find(); // ou équivalent selon ta base
+    res.json(demands);
+  } catch (error) {
+    console.error("Erreur serveur /api/demands:", error);
+    res.status(500).json({ message: "Erreur serveur interne" });
+  }
 });
 
 // Routes pour les demandes et l'authentification
