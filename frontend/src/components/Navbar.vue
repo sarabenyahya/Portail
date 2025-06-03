@@ -138,8 +138,8 @@ export default {
         async loadUserInfo() {
             try {
                 const { data } = await api.get('/auth/me'); // Endpoint pour récupérer les infos utilisateur
-                this.userEmail = data.email;
-                this.employeeName = data.name; // Récupération du nom de l'employé
+                this.userEmail = data.firstName + ' ' + data.lastName;
+                this.employeeName = data.firstName; // Récupération du nom de l'employé
             } catch (error) {
                 console.error('Erreur lors du chargement des infos utilisateur:', error);
                 // Fallback si pas d'endpoint /me

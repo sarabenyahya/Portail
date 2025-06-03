@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Demande de {{demandType}}</title>
+    <style>
+      body {
+        font-family: "Helvetica", "Arial", sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f9f9f9;
+      }
+      .container {
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        padding: 30px;
+        padding-left: 0; /* Supprime le padding à gauche */
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 20px;
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      .logo-container {
+        text-align: left;
+        margin-right: 20px;
+        margin-left: 0; /* Supprime la marge à gauche */
+      }
+      .logo {
+        max-width: 250px;
+        max-height: 150px;
+        display: block;
+      }
+      .header-content {
+        flex: 1;
+        text-align: center;
+      }
+      .header h1 {
+        color: #2c3e50;
+        margin-bottom: 5px;
+        font-size: 24px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      .header p {
+        color: #7f8c8d;
+        margin: 5px 0;
+        font-size: 14px;
+      }
+      .reference {
+        position: absolute;
+        top: 0;
+        right: 0;
+        background-color: #3498db;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+      }
+      .section {
+        margin-bottom: 25px;
+      }
+      .section h2 {
+        color: #2c3e50;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 5px;
+        font-size: 18px;
+        position: relative;
+      }
+      .section h2::after {
+        content: "";
+        position: absolute;
+        bottom: -1px;
+        left: 0;
+        width: 50px;
+        height: 3px;
+        background-color: #3498db;
+      }
+      .section-content {
+        padding-left: 20px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        padding: 15px;
+      }
+      .field {
+        margin-bottom: 10px;
+        display: flex;
+        align-items: baseline;
+      }
+      .field-label {
+        font-weight: bold;
+        display: inline-block;
+        min-width: 150px;
+        color: #3498db;
+      }
+      .field-value {
+        flex: 1;
+      }
+      .status {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+      }
+      .status-pending {
+        background-color: #f39c12;
+        color: white;
+      }
+      .status-approved {
+        background-color: #2ecc71;
+        color: white;
+      }
+      .status-rejected {
+        background-color: #e74c3c;
+        color: white;
+      }
+      .footer {
+        margin-top: 50px;
+        text-align: center;
+        font-size: 12px;
+        color: #7f8c8d;
+        border-top: 1px solid #eee;
+        padding-top: 20px;
+      }
+      .signature-section {
+        margin-top: 40px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .signature-box {
+        border-top: 1px solid #ddd;
+        width: 45%;
+        padding-top: 10px;
+        text-align: center;
+      }
+      .signature-title {
+        font-weight: bold;
+        font-size: 12px;
+        color: #7f8c8d;
+      }
+      .qr-code {
+        text-align: center;
+        margin-top: 20px;
+      }
+      .qr-code img {
+        width: 100px;
+        height: 100px;
+      }
+      .qr-code p {
+        font-size: 10px;
+        color: #7f8c8d;
+        margin-top: 5px;
+      }
+      @media print {
+        body {
+          background-color: white;
+          padding: 0;
+        }
+        .container {
+          box-shadow: none;
+          padding: 0;
+        }
+        .section-content {
+          background-color: white;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <!-- Logo de l'entreprise à gauche -->
+        <div class="logo-container">
+          <img src="{{logoPath}}" alt="Logo" class="logo" />
+        </div>
+        
+        <!-- Contenu de l'en-tête au centre -->
+        <div class="header-content">
+          <h1>Demande de {{demandType}}</h1>
+          <p>Référence: DEM-{{demandId}}</p>
+          <p>Date d'émission: {{emissionDate}}</p>
+        </div>
+        
+        <div class="reference">Réf: DEM-{{demandId}}</div>
+      </div>
+
+      <div class="section">
+        <h2>Informations de l'employé</h2>
+        <div class="section-content">
+          <div class="field">
+            <span class="field-label">Nom:</span>
+            <span class="field-value">{{lastName}}</span>
+          </div>
+          <div class="field">
+            <span class="field-label">Prénom:</span>
+            <span class="field-value">{{firstName}}</span>
+          </div>
+          <div class="field">
+            <span class="field-label">Email:</span>
+            <span class="field-value">{{email}}</span>
+          </div>
+          <div class="field">
+            <span class="field-label">Département:</span>
+            <span class="field-value">{{department}}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Détails de la demande</h2>
+        <div class="section-content">
+          <div class="field">
+            <span class="field-label">Type:</span>
+            <span class="field-value">{{demandType}}</span>
+          </div>
+          <div class="field">
+            <span class="field-label">Date de dépôt:</span>
+            <span class="field-value">{{requestedAt}}</span>
+          </div>
+          <div class="field">
+            <span class="field-label">Statut:</span>
+            <span class="field-value">
+              <span class="status {{statusClass}}">{{status}}</span>
+            </span>
+          </div>
+          {{#startDate}}
+          <div class="field">
+            <span class="field-label">Date de début:</span>
+            <span class="field-value">{{startDate}}</span>
+          </div>
+          {{/startDate}} {{#endDate}}
+          <div class="field">
+            <span class="field-label">Date de fin:</span>
+            <span class="field-value">{{endDate}}</span>
+          </div>
+          {{/endDate}} {{#duration}}
+          <div class="field">
+            <span class="field-label">Durée:</span>
+            <span class="field-value">{{duration}} jour(s)</span>
+          </div>
+          {{/duration}}
+        </div>
+      </div>
+
+      {{#reason}}
+      <div class="section">
+        <h2>Motif de la demande</h2>
+        <div class="section-content">
+          <p>{{reason}}</p>
+        </div>
+      </div>
+      {{/reason}}
+
+      <div class="signature-section">
+        <div class="signature-box">
+          <div class="signature-title">Signature de l'employé</div>
+          <div style="height: 60px"></div>
+          <div>{{firstName}} {{lastName}}</div>
+        </div>
+        <div class="signature-box">
+          <div class="signature-title">Signature du responsable</div>
+          <div style="height: 60px"></div>
+          <div>
+            {{#managerName}}{{managerName}}{{/managerName}}{{^managerName}}________________{{/managerName}}
+          </div>
+        </div>
+      </div>
+
+      <!-- Optionnel: QR code pour vérification -->
+      <div class="qr-code">
+        <!-- <img src="qr-code.png" alt="QR Code" /> -->
+        <p>Scannez ce code pour vérifier l'authenticité du document</p>
+      </div>
+
+      <div class="footer">
+        <p>Document généré automatiquement par BackOffice EMS</p>
+        <p>&copy; {{currentYear}} BackOffice EMS. Tous droits réservés.</p>
+      </div>
+    </div>
+  </body>
+</html>

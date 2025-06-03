@@ -5,11 +5,14 @@ export const useRequestStore = defineStore("requestStore", {
     requests: [],
   }),
   actions: {
-    setRequests(data) {
-      this.requests = data;
+    setRequests(requests) {
+      this.requests = requests;
     },
     addRequest(req) {
       this.requests.push(req);
+    },
+    deleteRequest(id) {
+      this.requests = this.requests.filter((req) => req._id !== id);
     },
   },
 });

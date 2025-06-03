@@ -10,5 +10,7 @@ router.use(auth);
 router.post("/", demandsController.createDemand);
 router.get("/", demandsController.getAllDemands);
 router.delete("/:id", demandsController.deleteDemand);
+router.put("/:id", demandsController.updateDemand);
+router.get("/:id/download", demandsController.downloadPdf);
 
 module.exports = router;

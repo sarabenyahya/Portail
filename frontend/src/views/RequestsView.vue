@@ -118,6 +118,12 @@
           <button type="button" class="btn-close" @click="errorMessage = ''" aria-label="Close"></button>
         </div>
 
+        <!-- Message de succès -->
+        <div v-if="successMessage" class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+          {{ successMessage }}
+          <button type="button" class="btn-close" @click="successMessage = ''" aria-label="Close"></button>
+        </div>
+
         <!-- Actions -->
         <div class="mb-4 d-flex flex-wrap gap-3">
           <button @click="showLeaveForm = true" class="btn btn-success" :disabled="showLeaveForm">
@@ -138,12 +144,13 @@
         <!-- Tableau -->
         <Table :headers="headers" :data="paginatedRequests" :showActions="true" @onEdit="editRequest"
           @onDelete="deleteRequest">
-          <template #cell-startDate="{ row }">
-            {{ formatDate(row.startDate) }}
+          <!-- Correction des noms de champs -->
+          <template #cell-dateDebut="{ row }">
+            {{ formatDate(row.dateDebut || row.startDate) }}
           </template>
 
-          <template #cell-endDate="{ row }">
-            {{ formatDate(row.endDate) }}
+          <template #cell-dateFin="{ row }">
+            {{ formatDate(row.dateFin || row.endDate) }}
           </template>
 
           <template #cell-status="{ row }">
@@ -154,7 +161,11 @@
 
           <template #actions="{ row }">
             <button class="btn btn-sm btn-outline-primary me-2" @click="editRequest(row._id)">Modifier</button>
-            <button class="btn btn-sm btn-outline-danger" @click="deleteRequest(row._id)">Supprimer</button>
+            <button class="btn btn-sm btn-outline-danger me-2" @click="deleteRequest(row._id)">Supprimer</button>
+            <button v-if="row.status === 'ACCEPTE'" class="btn btn-sm btn-outline-success"
+              @click="downloadPdf(row._id)">
+              <i class="fas fa-download me-1"></i>Télécharger
+            </button>
           </template>
         </Table>
 
@@ -186,13 +197,15 @@ export default {
       ],
       headers: [
         { label: 'Type', value: 'type' },
-        { label: 'début', value: 'dateDebut' },
-        { label: 'fin', value: 'dateFin' },
+        { label: 'Début', value: 'dateDebut' },
+        { label: 'Fin', value: 'dateFin' },
         { label: 'Statut', value: 'status' }
       ],
       errorMessage: '',
+      successMessage: '',
       currentPage: 1,
-      itemsPerPage: 5 // Nombre d'éléments par page
+      itemsPerPage: 5,
+      loading: false
     };
   },
   setup() {
@@ -248,6 +261,10 @@ export default {
         });
         console.log('Demande créée:', response.data);
         await this.loadRequests();
+        this.successMessage = "Demande d'attestation créée avec succès";
+        setTimeout(() => {
+          this.successMessage = '';
+        }, 3000);
       } catch (error) {
         console.error('Erreur lors de la création de la demande:', error);
         this.errorMessage = "Impossible de créer la demande d'attestation de travail";
@@ -274,20 +291,35 @@ export default {
       }
 
       try {
+        // Suppression côté serveur
         await api.delete(`/demands/${id}`);
         console.log('Demande supprimée avec succès');
 
-        // Recharger la liste des demandes
-        await this.loadRequests();
+        // IMPORTANT: Mettre à jour le store Pinia
+        this.requestStore.deleteRequest(id);
 
         // Gérer la pagination si la page actuelle devient vide
         if (this.paginatedRequests.length === 0 && this.currentPage > 1) {
           this.currentPage = this.currentPage - 1;
         }
 
+        // Message de succès
+        this.successMessage = 'Demande supprimée avec succès';
+        setTimeout(() => {
+          this.successMessage = '';
+        }, 3000);
+
       } catch (error) {
         console.error('Erreur lors de la suppression de la demande:', error);
-        this.errorMessage = 'Impossible de supprimer la demande. Veuillez réessayer.';
+
+        // Message d'erreur plus détaillé
+        if (error.response?.status === 404) {
+          this.errorMessage = 'Demande introuvable. Elle a peut-être déjà été supprimée.';
+        } else if (error.response?.status === 403) {
+          this.errorMessage = 'Vous n\'avez pas l\'autorisation de supprimer cette demande.';
+        } else {
+          this.errorMessage = 'Impossible de supprimer la demande. Veuillez réessayer.';
+        }
 
         // Afficher l'erreur pendant 5 secondes
         setTimeout(() => {
@@ -298,23 +330,72 @@ export default {
     formatDate(date) {
       if (!date) return "";
       const d = new Date(date);
-      return d.toLocaleDateString();
+      return d.toLocaleDateString('fr-FR');
     },
     getStatusClass(status) {
       const statusClasses = {
         'EN_ATTENTE': 'bg-warning text-dark',
-        'accepte': 'bg-success text-white',
-        'refuse': 'bg-danger text-white'
+        'ACCEPTE': 'bg-success text-white',
+        'REFUSE': 'bg-danger text-white'
       };
       return statusClasses[status] || 'bg-secondary text-white';
     },
     getStatusLabel(status) {
       const labels = {
         'EN_ATTENTE': 'En cours',
-        'accepte': 'Accepté',
-        'refuse': 'Refusé'
+        'ACCEPTE': 'Accepté',
+        'REFUSE': 'Refusé'
       };
       return labels[status] || status;
+    },
+    async downloadPdf(id) {
+      try {
+        // Vérifier d'abord l'état de la session
+        try {
+          await api.get('/auth/check-session');
+        } catch (sessionError) {
+          console.error('Session expirée:', sessionError);
+          this.errorMessage = 'Votre session a expiré. Veuillez vous reconnecter.';
+          setTimeout(() => {
+            this.$router.push('/');
+          }, 2000);
+          return;
+        }
+
+        // Afficher un indicateur de chargement
+        this.loading = true;
+
+        // Appel API pour télécharger le PDF
+        const response = await api.get(`/demands/${id}/download`, {
+          responseType: 'blob'
+        });
+
+        // Créer un URL pour le blob
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+
+        // Créer un lien temporaire et déclencher le téléchargement
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `demande-${id}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+
+        // Nettoyer
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+        this.loading = false;
+
+      } catch (error) {
+        console.error('Erreur lors du téléchargement du PDF:', error);
+        this.errorMessage = 'Impossible de télécharger le PDF de la demande';
+        this.loading = false;
+
+        // Effacer le message d'erreur après 3 secondes
+        setTimeout(() => {
+          this.errorMessage = '';
+        }, 3000);
+      }
     }
   }
 };

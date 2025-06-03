@@ -38,6 +38,18 @@ export default {
       type: Boolean,
       default: false
     }
+  },
+  data() {
+    return {
+      selectedIndex: null,
+    };
+  },
+  methods: {
+
+
+    handleDelete(index) {
+      this.$emit('onDelete', index);
+    },
   }
 };
 </script>
