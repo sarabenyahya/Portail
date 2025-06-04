@@ -18,8 +18,7 @@
           </td>
           <td v-if="showActions">
             <slot name="actions" :row="row">
-              <button class="btn btn-sm btn-outline-primary me-2" @click="$emit('onEdit', row._id)">Modifier</button>
-              <button class="btn btn-sm btn-outline-danger" @click="$emit('onDelete', row._id)">Supprimer</button>
+
             </slot>
           </td>
         </tr>

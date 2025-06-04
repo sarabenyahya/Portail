@@ -160,8 +160,7 @@
           </template>
 
           <template #actions="{ row }">
-            <button class="btn btn-sm btn-outline-primary me-2" @click="editRequest(row._id)">Modifier</button>
-            <button class="btn btn-sm btn-outline-danger me-2" @click="deleteRequest(row._id)">Supprimer</button>
+
             <button v-if="row.status === 'ACCEPTE'" class="btn btn-sm btn-outline-success"
               @click="downloadPdf(row._id)">
               <i class="fas fa-download me-1"></i>Télécharger

@@ -14,7 +14,7 @@ server.use(express.json());
 
 server.use(
   cors({
-    origin: "http://localhost:5175",
+    origin: "http://localhost:5174",
     credentials: true, // Allow credentials (cookies, authorization headers)
   })
 );
