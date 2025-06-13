@@ -5,19 +5,47 @@ const Employee = require("../models/Employee");
 // Créer une nouvelle demande
 exports.createDemand = async (req, res) => {
   try {
-    console.log("Creating demand...");
     const { type, dateDebut, dateFin } = req.body;
+
+    // Vérifier que l'employé est authentifié
+    if (!req.session.employeeId) {
+      return res.status(401).json({ message: "Utilisateur non authentifié" });
+    }
+
+    console.log(
+      "Création d'une demande pour l'employé:",
+      req.session.employeeId
+    );
+
+    // Convertir l'ID en string pour être sûr
+    const employeeIdStr = req.session.employeeId.toString();
+
+    // Créer la demande avec l'ID de l'employé
     const demand = new Demands({
-      employee: req.session.employeeId,
+      employee: employeeIdStr,
       type,
       dateDebut: type === "CONGE" ? dateDebut : null,
       dateFin: type === "CONGE" ? dateFin : null,
     });
 
     const savedDemand = await demand.save();
+    console.log(
+      "Demande créée avec succès:",
+      savedDemand._id,
+      "pour l'employé:",
+      employeeIdStr
+    );
+
+    // Vérifier que l'employé a bien été enregistré
+    const createdDemand = await Demands.findById(savedDemand._id);
+    console.log(
+      "Employé associé à la demande:",
+      createdDemand.employee.toString()
+    );
+
     res.status(201).json(savedDemand);
   } catch (error) {
-    console.error(error);
+    console.error("Erreur lors de la création de la demande:", error);
     res.status(400).json({ message: error.message });
   }
 };
@@ -25,11 +53,50 @@ exports.createDemand = async (req, res) => {
 // Récupérer toutes les demandes de l'employé connecté
 exports.getAllDemands = async (req, res) => {
   try {
-    const demands = await Demands.find({
-      employee: req.session.employeeId,
-    }).sort({ createdAt: -1 });
-    res.json(demands);
+    // Vérifier que l'employé est authentifié
+    if (!req.session.employeeId) {
+      return res.status(401).json({ message: "Utilisateur non authentifié" });
+    }
+
+    // Logs détaillés
+    console.log("getAllDemands - Session ID:", req.sessionID);
+    console.log("getAllDemands - Employé connecté ID:", req.session.employeeId);
+
+    // Convertir l'ID en ObjectId pour la comparaison
+    const mongoose = require("mongoose");
+    const employeeId = mongoose.Types.ObjectId(req.session.employeeId);
+
+    // Récupérer toutes les demandes
+    const allDemands = await Demands.find().populate(
+      "employee",
+      "firstName lastName email"
+    );
+
+    console.log(
+      `getAllDemands - Total de ${allDemands.length} demandes trouvées dans la base`
+    );
+
+    // Filtrer manuellement les demandes par ID d'employé
+    const filteredDemands = allDemands.filter(
+      (demand) =>
+        demand.employee._id.toString() === req.session.employeeId.toString()
+    );
+
+    console.log(
+      `getAllDemands - ${filteredDemands.length} demandes filtrées pour l'employé ${req.session.employeeId}`
+    );
+
+    // Vérifier les IDs des demandes filtrées
+    if (filteredDemands.length > 0) {
+      console.log(
+        "getAllDemands - IDs des demandes filtrées:",
+        filteredDemands.map((d) => d._id.toString())
+      );
+    }
+
+    res.json(filteredDemands);
   } catch (error) {
+    console.error("Erreur lors de la récupération des demandes:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -50,8 +117,8 @@ exports.getDemandById = async (req, res) => {
   }
 };
 
-// Récupérer toutes les demandes
-exports.getAllDemands = async (req, res) => {
+// Récupérer toutes les demandes (pour les administrateurs)
+exports.getAllDemandsAdmin = async (req, res) => {
   try {
     const demands = await Demands.find().populate(
       "employee",
@@ -116,11 +183,49 @@ exports.deleteDemand = async (req, res) => {
 // Récupérer les demandes d'un employé
 exports.getEmployeeDemands = async (req, res) => {
   try {
+    // Vérifier que l'employé est authentifié
+    if (!req.session.employeeId) {
+      return res.status(401).json({ message: "Utilisateur non authentifié" });
+    }
+
+    const { employeeId } = req.params;
+    console.log(`Récupération des demandes pour l'employé ID: ${employeeId}`);
+
+    // Vérifier si l'ID est valide
+    const mongoose = require("mongoose");
+    if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+      return res.status(400).json({ message: "ID d'employé invalide" });
+    }
+
+    // Récupérer les demandes de l'employé spécifié
     const demands = await Demands.find({
-      employee: req.params.employeeId,
+      employee: employeeId,
     }).populate("employee", "firstName lastName email");
-    res.json(demands);
+
+    console.log(
+      `${demands.length} demandes trouvées pour l'employé ${employeeId}`
+    );
+
+    // Formater les demandes pour le frontend
+    const formattedDemands = demands.map((demand) => ({
+      id: demand._id,
+      type: demand.type,
+      status: demand.status || "EN_ATTENTE",
+      createdAt: demand.createdAt,
+      updatedAt: demand.updatedAt,
+      startDate: demand.dateDebut,
+      endDate: demand.dateFin,
+      reason: demand.reason,
+      employeeId: demand.employee._id,
+      employeeName: `${demand.employee.firstName} ${demand.employee.lastName}`,
+      employeeEmail: demand.employee.email,
+    }));
+
+    res.json(formattedDemands);
   } catch (error) {
+    console.error(
+      `Erreur lors de la récupération des demandes pour l'employé: ${error}`
+    );
     res.status(500).json({ message: error.message });
   }
 };
@@ -207,5 +312,59 @@ exports.downloadPdf = async (req, res) => {
       error: error.message,
       stack: error.stack,
     });
+  }
+};
+
+// Endpoint temporaire pour déboguer
+exports.debugDemands = async (req, res) => {
+  try {
+    // Récupérer toutes les demandes avec leurs employés associés
+    const allDemands = await Demands.find().populate(
+      "employee",
+      "firstName lastName email"
+    );
+
+    // Créer un rapport de débogage
+    const report = allDemands.map((demand) => ({
+      demandId: demand._id,
+      employeeId: demand.employee ? demand.employee._id : "Non défini",
+      employeeName: demand.employee
+        ? `${demand.employee.firstName} ${demand.employee.lastName}`
+        : "Non défini",
+      type: demand.type,
+      status: demand.status,
+      createdAt: demand.createdAt,
+    }));
+
+    // Si l'utilisateur est connecté, filtrer les demandes pour cet utilisateur
+    let filteredDemands = [];
+    if (req.session.employeeId) {
+      filteredDemands = allDemands.filter(
+        (demand) =>
+          demand.employee &&
+          demand.employee._id.toString() === req.session.employeeId.toString()
+      );
+    }
+
+    res.json({
+      sessionInfo: {
+        sessionID: req.sessionID,
+        employeeId: req.session.employeeId,
+        email: req.session.email,
+      },
+      totalDemands: allDemands.length,
+      filteredDemands: filteredDemands.length,
+      report,
+      filteredReport: filteredDemands.map((demand) => ({
+        demandId: demand._id,
+        employeeId: demand.employee._id,
+        employeeName: `${demand.employee.firstName} ${demand.employee.lastName}`,
+        type: demand.type,
+        status: demand.status,
+      })),
+    });
+  } catch (error) {
+    console.error("Erreur de débogage:", error);
+    res.status(500).json({ message: error.message });
   }
 };

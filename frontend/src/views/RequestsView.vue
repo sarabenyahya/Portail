@@ -1,5 +1,16 @@
 <template>
-  <div>
+  <div class="requests-container">
+    <h1>Mes demandes</h1>
+
+    <!-- Informations de débogage -->
+    <div v-if="debug" class="debug-info">
+      <h3>Informations de débogage</h3>
+      <p>Nombre de demandes dans le store: {{ requestStore.requests.length }}</p>
+      <p>Nombre de demandes filtrées: {{ filteredRequests.length }}</p>
+      <p>Nombre de demandes paginées: {{ paginatedRequests.length }}</p>
+      <button @click="forceReload" class="btn btn-warning">Forcer le rechargement</button>
+    </div>
+
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg professional-navbar shadow-sm">
       <div class="container-fluid">
@@ -106,10 +117,22 @@
 
     <!-- Page Content -->
     <div class="professional-bg min-vh-100">
-      <div class="container shadow rounded bg-white p-4 position-relative" style="margin-top: 100px;">
+      <div class="container shadow rounded bg-white-transparent p-4 position-relative" style="margin-top: 100px;">
         <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
-          <h2 class="fw-semibold mb-0">Mes Demandes</h2>
+        <div class="card shadow-sm mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+              <h2 class="fw-semibold mb-0">Mes Demandes</h2>
+              <div class="d-flex gap-2">
+                <button @click="openLeaveForm" class="btn btn-primary">
+                  <i class="fas fa-calendar-plus me-2"></i>Demande de congé
+                </button>
+                <button @click="requestCertificate" class="btn btn-outline-primary">
+                  <i class="fas fa-file-alt me-2"></i>Attestation de travail
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Message d'erreur -->
@@ -124,53 +147,83 @@
           <button type="button" class="btn-close" @click="successMessage = ''" aria-label="Close"></button>
         </div>
 
-        <!-- Actions -->
-        <div class="mb-4 d-flex flex-wrap gap-3">
-          <button @click="showLeaveForm = true" class="btn btn-success" :disabled="showLeaveForm">
-            Demande de congé
-          </button>
-          <button @click="requestCertificate" class="btn btn-warning text-white" :disabled="showLeaveForm">
-            Demande d'attestation
-          </button>
+        <!-- Filtres avec des listes déroulantes compactes et professionnelles -->
+        <div class="row mb-4">
+          <div class="col-md-4 mb-3 mb-md-0">
+            <label for="statusFilter" class="form-label fw-bold small text-muted">STATUT</label>
+            <select id="statusFilter" class="form-select form-select-sm shadow-sm" v-model="selectedStatus">
+              <option value="">Tous les statuts</option>
+              <option v-for="status in statusOptions" :key="status.value" :value="status.value">
+                {{ status.label }}
+              </option>
+            </select>
+          </div>
+          <div class="col-md-4 mb-3 mb-md-0">
+            <label for="typeFilter" class="form-label fw-bold small text-muted">TYPE</label>
+            <select id="typeFilter" class="form-select form-select-sm shadow-sm" v-model="selectedType">
+              <option value="">Tous les types</option>
+              <option v-for="type in typeOptions" :key="type.value" :value="type.value">
+                {{ type.label }}
+              </option>
+            </select>
+          </div>
+
         </div>
 
         <!-- Formulaire -->
-        <transition name="fade">
-          <div v-if="showLeaveForm" class="leave-form-wrapper">
-            <LeaveForm @close="showLeaveForm = false" @submitted="loadRequests" />
+        <LeaveForm v-if="showLeaveForm" @close="closeLeaveForm" @submitted="handleLeaveSubmitted" />
+
+        <!-- Tableau avec état de chargement -->
+        <div class="position-relative">
+          <div v-if="loading" class="loading-overlay">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Chargement...</span>
+            </div>
           </div>
-        </transition>
 
-        <!-- Tableau -->
-        <Table :headers="headers" :data="paginatedRequests" :showActions="true" @onEdit="editRequest"
-          @onDelete="deleteRequest">
-          <!-- Correction des noms de champs -->
-          <template #cell-dateDebut="{ row }">
-            {{ formatDate(row.dateDebut || row.startDate) }}
-          </template>
+          <div v-if="filteredRequests.length === 0" class="text-center py-5 bg-light rounded">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">Aucune demande trouvée</h5>
+            <p class="text-muted small">Utilisez les boutons ci-dessus pour créer une nouvelle demande</p>
+          </div>
 
-          <template #cell-dateFin="{ row }">
-            {{ formatDate(row.dateFin || row.endDate) }}
-          </template>
+          <Table v-else :headers="headers" :data="paginatedRequests" :showActions="true" @onEdit="editRequest"
+            @onDelete="deleteRequest">
+            <!-- Correction des noms de champs -->
+            <template #cell-dateDebut="{ row }">
+              {{ formatDate(row.dateDebut || row.startDate) }}
+            </template>
 
-          <template #cell-status="{ row }">
-            <span class="badge" :class="getStatusClass(row.status)">
-              {{ getStatusLabel(row.status) }}
-            </span>
-          </template>
+            <template #cell-dateFin="{ row }">
+              {{ formatDate(row.dateFin || row.endDate) }}
+            </template>
 
-          <template #actions="{ row }">
+            <template #cell-status="{ row }">
+              <span class="badge" :class="getStatusClass(row.status)">
+                {{ getStatusLabel(row.status) }}
+              </span>
+            </template>
 
-            <button v-if="row.status === 'ACCEPTE'" class="btn btn-sm btn-outline-success"
-              @click="downloadPdf(row._id)">
-              <i class="fas fa-download me-1"></i>Télécharger
-            </button>
-          </template>
-        </Table>
+            <template #actions="{ row }">
+              <div class="d-flex gap-2">
+                <button v-if="row.status === 'ACCEPTE'" class="btn btn-sm btn-outline-success"
+                  @click="downloadPdf(row._id)" title="Télécharger">
+                  <i class="fas fa-download"></i>
+                </button>
+                <button v-if="row.status === 'EN_ATTENTE'" class="btn btn-sm btn-outline-danger"
+                  @click="deleteRequest(row._id)" title="Supprimer">
+                  <i class="fas fa-trash-alt"></i>
+                </button>
+              </div>
+            </template>
+          </Table>
+        </div>
 
         <!-- Pagination -->
-        <Pagination v-if="totalPages > 1" :currentPage="currentPage" :totalPages="totalPages"
-          @update:currentPage="currentPage = $event" />
+        <div class="d-flex justify-content-center mt-4">
+          <Pagination v-if="totalPages > 1" :currentPage="currentPage" :totalPages="totalPages"
+            @update:currentPage="currentPage = $event" />
+        </div>
       </div>
     </div>
   </div>
@@ -182,6 +235,7 @@ import { useRequestStore } from '../stores/requestStore';
 import LeaveForm from '../components/LeaveForm.vue';
 import Table from '../components/Table.vue';
 import Pagination from '../components/Pagination.vue';
+import { demandService } from '../services/demandService';
 
 export default {
   components: { LeaveForm, Table, Pagination },
@@ -189,7 +243,7 @@ export default {
     return {
       showLeaveForm: false,
       userEmail: '',
-      notificationCount: 0,
+      notificationCount: 2, // Nombre de notifications non lues
       notifications: [
         { id: 1, message: 'Votre demande de congé a été approuvée', date: new Date() },
         { id: 2, message: 'Nouvelle politique RH disponible', date: new Date(Date.now() - 86400000) }
@@ -204,7 +258,22 @@ export default {
       successMessage: '',
       currentPage: 1,
       itemsPerPage: 5,
-      loading: false
+      loading: false,
+
+      // Filtres par liste déroulante (valeur unique)
+      selectedStatus: '',
+      selectedType: '',
+
+      // Options pour les filtres
+      statusOptions: [
+        { value: 'EN_ATTENTE', label: 'En cours' },
+        { value: 'ACCEPTE', label: 'Accepté' },
+        { value: 'REFUSE', label: 'Refusé' }
+      ],
+      typeOptions: [
+        { value: 'CONGE', label: 'Congé' },
+        { value: 'ATTESTATION', label: 'Attestation' }
+      ]
     };
   },
   setup() {
@@ -212,25 +281,60 @@ export default {
     return { requestStore };
   },
   computed: {
-    totalPages() {
-      return Math.ceil(this.requestStore.requests.length / this.itemsPerPage);
+    // Filtrer les demandes en fonction des filtres sélectionnés
+    filteredRequests() {
+      let requests = this.requestStore.requests;
+
+      console.log("Filtrage des demandes:", requests);
+
+      // Appliquer le filtre de statut
+      if (this.selectedStatus) {
+        requests = requests.filter(req => req.status === this.selectedStatus);
+      }
+
+      // Appliquer le filtre de type
+      if (this.selectedType) {
+        requests = requests.filter(req => req.type === this.selectedType);
+      }
+
+      // Appliquer le filtre de date
+      if (this.selectedDateRange) {
+        // Logique de filtrage par date
+      }
+
+      console.log("Demandes filtrées:", requests);
+      return requests;
     },
+
+    // Pagination
     paginatedRequests() {
       const start = (this.currentPage - 1) * this.itemsPerPage;
       const end = start + this.itemsPerPage;
-      return this.requestStore.requests.slice(start, end);
+      return this.filteredRequests.slice(start, end);
+    },
+
+    totalPages() {
+      return Math.ceil(this.filteredRequests.length / this.itemsPerPage);
     }
   },
   async created() {
     try {
+      this.loading = true;
       await api.get('/auth/check-session');
       await this.loadUserInfo();
       await this.loadRequests();
     } catch {
       this.$router.push('/');
+    } finally {
+      this.loading = false;
     }
   },
   methods: {
+    resetFilters() {
+      this.selectedStatus = '';
+      this.selectedType = '';
+      this.currentPage = 1;
+    },
     async loadUserInfo() {
       try {
         const response = await api.get('/auth/me');
@@ -241,25 +345,48 @@ export default {
     },
     async loadRequests() {
       try {
-        const response = await api.get('/demands');
-        this.requestStore.setRequests(response.data);
-        // Réinitialiser à la première page si nécessaire
-        if (this.currentPage > this.totalPages && this.totalPages > 0) {
-          this.currentPage = 1;
-        }
+        this.loading = true;
+        this.errorMessage = '';
+        console.log("Chargement des demandes...");
+
+        // Utiliser le service pour récupérer les demandes
+        const demands = await demandService.getCurrentEmployeeDemands();
+
+        // Mettre à jour le store avec les demandes reçues
+        this.requestStore.setRequests(demands);
+        console.log(`${demands.length} demandes chargées avec succès`);
+
       } catch (error) {
-        console.error('Erreur API:', error);
+        console.error('Erreur lors du chargement des demandes:', error);
         this.errorMessage = 'Impossible de charger les demandes';
+
+        // Afficher plus de détails sur l'erreur
+        if (error.response) {
+          console.error('Détails de l\'erreur:', error.response.data);
+          this.errorMessage += `: ${error.response.data.message || 'Erreur serveur'}`;
+        } else if (error.request) {
+          console.error('Pas de réponse du serveur');
+          this.errorMessage += ': Le serveur ne répond pas';
+        } else {
+          console.error('Erreur de configuration de la requête:', error.message);
+          this.errorMessage += `: ${error.message}`;
+        }
+      } finally {
+        this.loading = false;
       }
     },
     async requestCertificate() {
       try {
-        const response = await api.post('/demands', {
+        this.loading = true;
+        // Utiliser le service pour créer une demande d'attestation
+        await demandService.createDemand({
           type: 'ATTESTATION',
           status: 'EN_ATTENTE'
         });
-        console.log('Demande créée:', response.data);
+
+        // Recharger les demandes
         await this.loadRequests();
+
         this.successMessage = "Demande d'attestation créée avec succès";
         setTimeout(() => {
           this.successMessage = '';
@@ -267,6 +394,8 @@ export default {
       } catch (error) {
         console.error('Erreur lors de la création de la demande:', error);
         this.errorMessage = "Impossible de créer la demande d'attestation de travail";
+      } finally {
+        this.loading = false;
       }
     },
     async logout() {
@@ -290,9 +419,9 @@ export default {
       }
 
       try {
-        // Suppression côté serveur
-        await api.delete(`/demands/${id}`);
-        console.log('Demande supprimée avec succès');
+        this.loading = true;
+        // Utiliser le service pour supprimer la demande
+        await demandService.deleteDemand(id);
 
         // IMPORTANT: Mettre à jour le store Pinia
         this.requestStore.deleteRequest(id);
@@ -307,23 +436,11 @@ export default {
         setTimeout(() => {
           this.successMessage = '';
         }, 3000);
-
       } catch (error) {
-        console.error('Erreur lors de la suppression de la demande:', error);
-
-        // Message d'erreur plus détaillé
-        if (error.response?.status === 404) {
-          this.errorMessage = 'Demande introuvable. Elle a peut-être déjà été supprimée.';
-        } else if (error.response?.status === 403) {
-          this.errorMessage = 'Vous n\'avez pas l\'autorisation de supprimer cette demande.';
-        } else {
-          this.errorMessage = 'Impossible de supprimer la demande. Veuillez réessayer.';
-        }
-
-        // Afficher l'erreur pendant 5 secondes
-        setTimeout(() => {
-          this.errorMessage = '';
-        }, 5000);
+        console.error('Erreur lors de la suppression:', error);
+        this.errorMessage = 'Impossible de supprimer la demande';
+      } finally {
+        this.loading = false;
       }
     },
     formatDate(date) {
@@ -364,14 +481,11 @@ export default {
         // Afficher un indicateur de chargement
         this.loading = true;
 
-        // Appel API pour télécharger le PDF
-        const response = await api.get(`/demands/${id}/download`, {
-          responseType: 'blob'
-        });
+        // Utiliser le service pour télécharger le PDF
+        const pdfBlob = await demandService.downloadDemandPdf(id);
 
         // Créer un URL pour le blob
-        const blob = new Blob([response.data], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
+        const url = window.URL.createObjectURL(pdfBlob);
 
         // Créer un lien temporaire et déclencher le téléchargement
         const link = document.createElement('a');
@@ -395,6 +509,26 @@ export default {
           this.errorMessage = '';
         }, 3000);
       }
+    },
+    openLeaveForm() {
+      this.showLeaveForm = true;
+    },
+    closeLeaveForm() {
+      this.showLeaveForm = false;
+    },
+    handleLeaveSubmitted() {
+      this.loadRequests();
+      this.successMessage = "Demande de congé créée avec succès";
+      setTimeout(() => {
+        this.successMessage = '';
+      }, 3000);
+      this.closeLeaveForm();
+    },
+    forceReload() {
+      // Vider le store
+      this.requestStore.clearRequests();
+      // Recharger les demandes
+      this.loadRequests();
     }
   }
 };
@@ -402,33 +536,190 @@ export default {
 
 <style scoped>
 .professional-navbar {
-  background-color: #fff;
+  background-color: rgba(255, 255, 255, 0.85);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1030;
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.professional-bg {
+  background-color: transparent;
+  padding-top: 20px;
+  padding-bottom: 40px;
+}
+
+.bg-white-transparent {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(10px);
+}
+
+.card {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* Styles pour le tableau avec fond transparent */
+.requests-table :deep(table) {
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(5px);
+}
+
+.requests-table :deep(th) {
+  background-color: rgba(248, 249, 250, 0.8);
+  color: #495057;
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+  padding: 12px 15px;
+  border-bottom: 2px solid rgba(222, 226, 230, 0.7);
+}
+
+.requests-table :deep(td) {
+  padding: 12px 15px;
+  vertical-align: middle;
+  border-top: 1px solid rgba(222, 226, 230, 0.5);
+}
+
+.requests-table :deep(tr:hover) {
+  background-color: rgba(0, 123, 255, 0.1);
+}
+
+/* Message vide avec fond transparent */
+.text-center.py-5.bg-light {
+  background-color: rgba(248, 249, 250, 0.7) !important;
+  backdrop-filter: blur(5px);
 }
 
 .brand-text {
   margin-left: 0.5rem;
   font-weight: bold;
+  color: #333;
 }
 
 .logo {
   height: 40px;
 }
 
+/* Styles pour les filtres */
+.form-select {
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  transition: all 0.2s ease;
+}
+
+.form-select:focus {
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.15);
+}
+
+.form-select-sm {
+  height: 38px;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+}
+
+/* Styles pour les boutons d'action */
+.btn {
+  border-radius: 5px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-success {
+  background-color: #28a745;
+  border-color: #28a745;
+}
+
+.btn-warning {
+  background-color: #fd7e14;
+  border-color: #fd7e14;
+}
+
+/* Styles pour les badges de statut */
+.badge {
+  padding: 0.5em 0.8em;
+  font-weight: 500;
+  border-radius: 4px;
+}
+
+/* Overlay de chargement */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+}
+
+/* Styles pour les notifications */
 .notification-badge {
   position: absolute;
   top: 5px;
   right: 5px;
   font-size: 0.7rem;
-  background: red;
+  background: #dc3545;
   color: white;
   border-radius: 50%;
   padding: 2px 6px;
 }
 
-.leave-form-wrapper {
-  margin-bottom: 20px;
+.notifications-dropdown {
+  min-width: 280px;
+  padding: 0;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border: none;
+  border-radius: 0.5rem;
 }
 
+.dropdown-header {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+}
+
+.notification-item {
+  padding: 0.5rem 0;
+}
+
+/* Styles pour le menu utilisateur */
+.user-avatar {
+  font-size: 1.5rem;
+  color: #6c757d;
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.user-role {
+  font-size: 0.75rem;
+}
+
+.user-dropdown {
+  min-width: 220px;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border: none;
+  border-radius: 0.5rem;
+}
+
+/* Animations */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;
@@ -437,5 +728,61 @@ export default {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* Ajouter ces styles à la section style existante */
+.btn-primary {
+  background-color: #4361ee;
+  border-color: #4361ee;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: #3a56d4;
+  border-color: #3a56d4;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(67, 97, 238, 0.2);
+}
+
+.btn-outline-primary {
+  color: #4361ee;
+  border-color: #4361ee;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-primary:hover {
+  background-color: rgba(67, 97, 238, 0.1);
+  color: #3a56d4;
+  border-color: #3a56d4;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(67, 97, 238, 0.1);
+}
+
+.card {
+  border: none;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.card-body {
+  padding: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .d-flex.gap-2 {
+    flex-direction: column;
+    width: 100%;
+    margin-top: 1rem;
+  }
+
+  .d-flex.justify-content-between {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .btn {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
 }
 </style>

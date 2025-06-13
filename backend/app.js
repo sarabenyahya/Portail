@@ -14,7 +14,7 @@ server.use(express.json());
 
 server.use(
   cors({
-    origin: "http://localhost:5174",
+    origin: "http://localhost:5173",
     credentials: true, // Allow credentials (cookies, authorization headers)
   })
 );
@@ -27,6 +27,13 @@ server.use(
     cookie: { secure: false },
   })
 );
+
+// Middleware pour déboguer les sessions
+server.use((req, res, next) => {
+  console.log("Session ID:", req.sessionID);
+  console.log("Session data:", req.session);
+  next();
+});
 
 // Routes de base
 server.get("/api/demands", async (req, res) => {
