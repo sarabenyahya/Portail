@@ -1,6 +1,8 @@
 const Demands = require("../models/Demand");
 const pdfService = require("../services/pdfService");
 const Employee = require("../models/Employee");
+const path = require("path");
+const fs = require("fs");
 
 // Créer une nouvelle demande
 exports.createDemand = async (req, res) => {
@@ -209,6 +211,7 @@ exports.getEmployeeDemands = async (req, res) => {
     // Formater les demandes pour le frontend
     const formattedDemands = demands.map((demand) => ({
       id: demand._id,
+      _id: demand._id, // Ajouter également _id pour compatibilité
       type: demand.type,
       status: demand.status || "EN_ATTENTE",
       createdAt: demand.createdAt,
@@ -220,6 +223,8 @@ exports.getEmployeeDemands = async (req, res) => {
       employeeName: `${demand.employee.firstName} ${demand.employee.lastName}`,
       employeeEmail: demand.employee.email,
     }));
+
+    console.log("Demandes formatées:", JSON.stringify(formattedDemands[0]));
 
     res.json(formattedDemands);
   } catch (error) {
@@ -233,13 +238,28 @@ exports.getEmployeeDemands = async (req, res) => {
 // Télécharger le PDF d'une demande
 exports.downloadPdf = async (req, res) => {
   try {
-    console.log("Demande de téléchargement PDF pour l'ID:", req.params.id);
+    const { id } = req.params;
+
+    // Vérifier que l'ID est défini
+    if (!id) {
+      console.log("ID de demande manquant dans les paramètres");
+      return res.status(400).json({ message: "ID de demande requis" });
+    }
+
+    console.log("Demande de téléchargement PDF pour l'ID:", id);
+
+    // Vérifier que l'ID est un ObjectId valide
+    const mongoose = require("mongoose");
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      console.log("ID de demande invalide:", id);
+      return res.status(400).json({ message: "ID de demande invalide" });
+    }
 
     // Récupérer la demande avec les informations de l'employé
-    const demand = await Demands.findById(req.params.id).populate("employee");
+    const demand = await Demands.findById(id).populate("employee");
 
     if (!demand) {
-      console.log("Demande non trouvée");
+      console.log("Demande non trouvée pour l'ID:", id);
       return res.status(404).json({ message: "Demande non trouvée" });
     }
 
@@ -252,19 +272,11 @@ exports.downloadPdf = async (req, res) => {
       demand.status
     );
 
-    // Vérifier si la demande est acceptée - temporairement commenté pour tests
-    // if (demand.status !== "ACCEPTE") {
-    //   console.log("Demande non acceptée, statut actuel:", demand.status);
-    //   return res.status(403).json({
-    //     message: "Seules les demandes acceptées peuvent être téléchargées",
-    //   });
-    // }
-
     // Récupérer les informations complètes de l'employé
     const employee = await Employee.findById(demand.employee._id);
 
     if (!employee) {
-      console.log("Employé non trouvé");
+      console.log("Employé non trouvé pour l'ID:", demand.employee._id);
       return res.status(404).json({ message: "Employé non trouvé" });
     }
 
@@ -284,33 +296,57 @@ exports.downloadPdf = async (req, res) => {
       dateFin: demand.dateFin,
       createdAt: demand.createdAt,
       reason: demand.reason || "",
+      // Ajouter d'autres champs si nécessaire
     };
 
     console.log("Données préparées pour le PDF:", demandData);
 
-    // Générer le PDF
-    console.log("Appel du service PDF...");
-    const pdfBuffer = await pdfService.generateDemandPdf(demandData, employee);
-    console.log("PDF généré avec succès, taille:", pdfBuffer.length, "octets");
+    try {
+      // Générer le PDF
+      console.log("Appel du service PDF...");
+      const pdfBuffer = await pdfService.generateDemandPdf(
+        demandData,
+        employee
+      );
 
-    // Définir les en-têtes pour le téléchargement
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=demande-${demand._id}.pdf`
-    );
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        console.error("Le service PDF a généré un buffer vide");
+        throw new Error("Le service PDF a généré un buffer vide");
+      }
 
-    console.log("En-têtes définis, envoi du PDF...");
+      console.log(
+        "PDF généré avec succès, taille:",
+        pdfBuffer.length,
+        "octets"
+      );
 
-    // Envoyer le PDF
-    res.send(pdfBuffer);
-    console.log("PDF envoyé avec succès");
+      // Définir les en-têtes pour le téléchargement
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=demande-${demand._id}.pdf`
+      );
+      res.setHeader("Content-Length", pdfBuffer.length);
+
+      console.log("En-têtes définis, envoi du PDF...");
+
+      // Envoyer le PDF
+      res.send(pdfBuffer);
+      console.log("PDF envoyé avec succès");
+    } catch (pdfError) {
+      console.error("Erreur lors de la génération du PDF:", pdfError);
+      return res.status(500).json({
+        message: "Erreur lors de la génération du PDF",
+        error: pdfError.message,
+      });
+    }
   } catch (error) {
     console.error("Erreur détaillée lors de la génération du PDF:", error);
+    console.error(error.stack);
     res.status(500).json({
       message: "Erreur lors de la génération du PDF",
       error: error.message,
-      stack: error.stack,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 };
@@ -366,5 +402,64 @@ exports.debugDemands = async (req, res) => {
   } catch (error) {
     console.error("Erreur de débogage:", error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+// Route de débogage pour tester la génération de PDF
+exports.debugPdf = async (req, res) => {
+  try {
+    console.log("Test de génération PDF pour l'ID:", req.params.id);
+
+    // Récupérer la demande avec les informations de l'employé
+    const demand = await Demands.findById(req.params.id).populate("employee");
+
+    if (!demand) {
+      return res.status(404).json({ message: "Demande non trouvée" });
+    }
+
+    // Récupérer les informations complètes de l'employé
+    const employee = await Employee.findById(demand.employee._id);
+
+    if (!employee) {
+      return res.status(404).json({ message: "Employé non trouvé" });
+    }
+
+    // Préparer les données pour le service PDF
+    const demandData = {
+      _id: demand._id,
+      type: demand.type,
+      status: demand.status,
+      dateDebut: demand.dateDebut,
+      dateFin: demand.dateFin,
+      createdAt: demand.createdAt,
+      reason: demand.reason || "",
+    };
+
+    // Renvoyer les données qui seraient utilisées pour générer le PDF
+    return res.status(200).json({
+      message: "Données pour la génération du PDF",
+      demand: demandData,
+      employee: {
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        email: employee.email,
+        department: employee.department,
+      },
+      templatePath: path.join(__dirname, "../templates/pdf/demand.html"),
+      templateExists: fs.existsSync(
+        path.join(__dirname, "../templates/pdf/demand.html")
+      ),
+      logoPath: path.join(__dirname, "../public/images/logo.png"),
+      logoExists: fs.existsSync(
+        path.join(__dirname, "../public/images/logo.png")
+      ),
+    });
+  } catch (error) {
+    console.error("Erreur lors du test de génération PDF:", error);
+    return res.status(500).json({
+      message: "Erreur lors du test de génération PDF",
+      error: error.message,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
   }
 };

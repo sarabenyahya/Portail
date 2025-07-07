@@ -95,16 +95,67 @@ export const demandService = {
    */
   async downloadDemandPdf(demandId) {
     try {
+      // Vérifier que l'ID est défini
+      if (!demandId) {
+        console.error("Service: ID de demande non défini");
+        throw new Error(
+          "L'ID de la demande est requis pour télécharger le PDF"
+        );
+      }
+
       console.log(
         `Service: Téléchargement du PDF pour la demande ID: ${demandId}`
       );
+
+      // Utiliser responseType: 'blob' pour recevoir directement un blob
       const response = await api.get(`/demands/${demandId}/download`, {
         responseType: "blob",
+        // Augmenter le timeout pour les opérations de génération de PDF qui peuvent prendre plus de temps
+        timeout: 60000, // 60 secondes
+        // Ajouter des en-têtes spécifiques si nécessaire
+        headers: {
+          Accept: "application/pdf",
+        },
       });
-      console.log("Service: PDF téléchargé avec succès");
-      return response.data;
+
+      // Vérifier si la réponse contient un PDF valide
+      const contentType = response.headers["content-type"];
+      if (contentType && contentType.includes("application/pdf")) {
+        console.log(
+          `Service: PDF téléchargé avec succès, taille: ${response.data.size} octets`
+        );
+        return response.data;
+      } else {
+        console.error(
+          `Service: Le serveur n'a pas renvoyé un PDF valide, type de contenu: ${contentType}`
+        );
+        throw new Error("Le serveur n'a pas renvoyé un PDF valide");
+      }
     } catch (error) {
       console.error("Service: Erreur lors du téléchargement du PDF:", error);
+
+      // Si l'erreur contient une réponse et que cette réponse est un blob,
+      // essayer de lire le message d'erreur du serveur
+      if (error.response && error.response.data instanceof Blob) {
+        try {
+          // Convertir le blob en texte pour lire le message d'erreur
+          const errorText = await error.response.data.text();
+          console.log("Service: Contenu de l'erreur:", errorText);
+
+          try {
+            const errorJson = JSON.parse(errorText);
+            error.serverMessage = errorJson.message || errorText;
+          } catch (jsonError) {
+            error.serverMessage = errorText;
+          }
+        } catch (blobError) {
+          console.error(
+            "Service: Impossible de lire le message d'erreur du blob:",
+            blobError
+          );
+        }
+      }
+
       throw error;
     }
   },

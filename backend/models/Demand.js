@@ -8,7 +8,7 @@ const demandsSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ["CONGE", "ATTESTATION"],
+    enum: ["CONGE", "ATTESTATION De TRAVAIL"],
     required: true,
   },
   status: {

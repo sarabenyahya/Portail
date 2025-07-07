@@ -57,7 +57,20 @@ export const useRequestStore = defineStore("requests", {
     // Met à jour toutes les demandes
     setRequests(requests) {
       console.log("Store: Mise à jour des demandes", requests);
-      this.requests = requests;
+
+      // Normaliser les IDs pour s'assurer qu'ils sont cohérents
+      this.requests = requests.map((request) => {
+        // Si la demande a un _id mais pas d'id, copier _id vers id
+        if (request._id && !request.id) {
+          request.id = request._id;
+        }
+        // Si la demande a un id mais pas de _id, copier id vers _id
+        if (request.id && !request._id) {
+          request._id = request.id;
+        }
+        return request;
+      });
+
       this.lastUpdated = new Date();
     },
 

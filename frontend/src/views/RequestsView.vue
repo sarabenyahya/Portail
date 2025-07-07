@@ -207,11 +207,11 @@
             <template #actions="{ row }">
               <div class="d-flex gap-2">
                 <button v-if="row.status === 'ACCEPTE'" class="btn btn-sm btn-outline-success"
-                  @click="downloadPdf(row._id)" title="Télécharger">
+                  @click="downloadPdf(row.id)" title="Télécharger">
                   <i class="fas fa-download"></i>
                 </button>
                 <button v-if="row.status === 'EN_ATTENTE'" class="btn btn-sm btn-outline-danger"
-                  @click="deleteRequest(row._id)" title="Supprimer">
+                  @click="deleteRequest(row.id)" title="Supprimer">
                   <i class="fas fa-trash-alt"></i>
                 </button>
               </div>
@@ -272,7 +272,7 @@ export default {
       ],
       typeOptions: [
         { value: 'CONGE', label: 'Congé' },
-        { value: 'ATTESTATION', label: 'Attestation' }
+        { value: 'ATTESTATION De TRAVAIL', label: 'Attestation de travail' }
       ]
     };
   },
@@ -285,7 +285,7 @@ export default {
     filteredRequests() {
       let requests = this.requestStore.requests;
 
-      console.log("Filtrage des demandes:", requests);
+      console.log("Structure des demandes:", requests.length > 0 ? requests[0] : "Aucune demande");
 
       // Appliquer le filtre de statut
       if (this.selectedStatus) {
@@ -380,14 +380,14 @@ export default {
         this.loading = true;
         // Utiliser le service pour créer une demande d'attestation
         await demandService.createDemand({
-          type: 'ATTESTATION',
+          type: 'ATTESTATION De TRAVAIL',
           status: 'EN_ATTENTE'
         });
 
         // Recharger les demandes
         await this.loadRequests();
 
-        this.successMessage = "Demande d'attestation créée avec succès";
+        this.successMessage = "Demande d'attestation de travail créée avec succès";
         setTimeout(() => {
           this.successMessage = '';
         }, 3000);
@@ -466,6 +466,27 @@ export default {
     },
     async downloadPdf(id) {
       try {
+        // Vérifier que l'ID est défini
+        if (!id) {
+          console.error('ID de demande non défini');
+
+          // Trouver la ligne correspondante dans paginatedRequests
+          const currentRows = this.paginatedRequests;
+          console.log('Données actuelles:', JSON.stringify(currentRows));
+
+          // Afficher les propriétés disponibles sur les lignes
+          if (currentRows.length > 0) {
+            console.log('Propriétés disponibles sur la première ligne:', Object.keys(currentRows[0]));
+            console.log('Valeurs de la première ligne:', JSON.stringify(currentRows[0]));
+          }
+
+          this.errorMessage = 'Impossible de télécharger le PDF: ID de demande manquant';
+          setTimeout(() => {
+            this.errorMessage = '';
+          }, 5000);
+          return;
+        }
+
         // Vérifier d'abord l'état de la session
         try {
           await api.get('/auth/check-session');
@@ -480,34 +501,81 @@ export default {
 
         // Afficher un indicateur de chargement
         this.loading = true;
+        this.errorMessage = '';
+        console.log(`Tentative de téléchargement du PDF pour la demande ID: ${id}`);
 
-        // Utiliser le service pour télécharger le PDF
-        const pdfBlob = await demandService.downloadDemandPdf(id);
+        try {
+          // Utiliser le service pour télécharger le PDF
+          const pdfBlob = await demandService.downloadDemandPdf(id);
 
-        // Créer un URL pour le blob
-        const url = window.URL.createObjectURL(pdfBlob);
+          // Vérifier si le blob est valide
+          if (!pdfBlob || pdfBlob.size === 0) {
+            throw new Error('Le PDF téléchargé est vide ou invalide');
+          }
 
-        // Créer un lien temporaire et déclencher le téléchargement
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `demande-${id}.pdf`);
-        document.body.appendChild(link);
-        link.click();
+          console.log(`PDF téléchargé avec succès, taille: ${pdfBlob.size} octets`);
 
-        // Nettoyer
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(link);
-        this.loading = false;
+          // Créer un URL pour le blob
+          const url = window.URL.createObjectURL(pdfBlob);
 
+          // Créer un lien temporaire et déclencher le téléchargement
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `demande-${id}.pdf`);
+          document.body.appendChild(link);
+          link.click();
+
+          // Nettoyer
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(link);
+          console.log('Téléchargement du PDF terminé');
+
+          // Afficher un message de succès
+          this.successMessage = 'PDF téléchargé avec succès';
+          setTimeout(() => {
+            this.successMessage = '';
+          }, 3000);
+        } catch (downloadError) {
+          console.error('Erreur spécifique au téléchargement:', downloadError);
+          throw downloadError; // Propager l'erreur pour être traitée dans le bloc catch principal
+        }
       } catch (error) {
         console.error('Erreur lors du téléchargement du PDF:', error);
-        this.errorMessage = 'Impossible de télécharger le PDF de la demande';
-        this.loading = false;
 
-        // Effacer le message d'erreur après 3 secondes
+        // Afficher des détails plus précis sur l'erreur
+        if (error.response) {
+          console.error('Détails de l\'erreur serveur:', {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            data: error.response.data
+          });
+
+          // Message d'erreur plus spécifique basé sur le code d'erreur
+          if (error.response.status === 500) {
+            this.errorMessage = error.serverMessage ||
+              'Erreur serveur lors de la génération du PDF. Veuillez réessayer plus tard.';
+          } else if (error.response.status === 404) {
+            this.errorMessage = 'La demande n\'a pas été trouvée ou le PDF n\'est pas disponible.';
+          } else if (error.response.status === 403) {
+            this.errorMessage = 'Vous n\'êtes pas autorisé à télécharger ce PDF.';
+          } else {
+            this.errorMessage = error.serverMessage ||
+              `Erreur ${error.response.status}: Impossible de télécharger le PDF`;
+          }
+        } else if (error.request) {
+          console.error('Pas de réponse du serveur:', error.request);
+          this.errorMessage = 'Le serveur ne répond pas. Veuillez vérifier votre connexion et réessayer.';
+        } else {
+          console.error('Erreur de configuration:', error.message);
+          this.errorMessage = `Erreur lors du téléchargement: ${error.message}`;
+        }
+
+        // Effacer le message d'erreur après 5 secondes
         setTimeout(() => {
           this.errorMessage = '';
-        }, 3000);
+        }, 5000);
+      } finally {
+        this.loading = false;
       }
     },
     openLeaveForm() {

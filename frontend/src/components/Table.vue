@@ -49,6 +49,12 @@ export default {
     handleDelete(index) {
       this.$emit('onDelete', index);
     },
+  },
+  mounted() {
+    if (this.data && this.data.length > 0) {
+      console.log("Structure des données dans Table:", this.data[0]);
+      console.log("Propriétés disponibles:", Object.keys(this.data[0]));
+    }
   }
 };
 </script>
